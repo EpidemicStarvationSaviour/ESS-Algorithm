@@ -1,0 +1,3 @@
+[submodule "ESS-Protobuf"]
+	path = ESS-Protobuf
+	url = https://github.com/EpidemicStarvationSaviour/ESS-Protobuf
