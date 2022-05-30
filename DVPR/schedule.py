@@ -6,7 +6,7 @@ from .role import Supplier, Rider, Order, Route
 
 class RouteScheduler:
 
-    def __init__(self, aroundScope:float = 5.0, maxIteration:int = 100):
+    def __init__(self, aroundScope:float = 100.0, maxIteration:int = 100):
         self.aroundScope = aroundScope
         self.maxIteration = maxIteration
         self.clusters = []
@@ -20,7 +20,7 @@ class RouteScheduler:
         self.order = Order(0, dict(request.request.items))
         self.suppliers = [Supplier(index + 1, dict(item.items)) for index, item in enumerate(list(request.itemlists))]
         self.numRider = request.num_deliverer
-        self.riders = [Rider(index + len(self.suppliers) + 1) for index in range(self.numRider)]
+        self.riders = [Rider(index + len(self.suppliers) + 1, index + 1) for index in range(self.numRider)]
         self.distances = list(request.distance)
 
         dict_suppliers = {}
@@ -77,9 +77,6 @@ class RouteScheduler:
 
         self.clusterSuppliers()
 
-        # for supplier in self.suppliers.values():
-        #     print(supplier)
-
     def scheduleRoute(self,request):
         """
         Brief:
@@ -94,15 +91,17 @@ class RouteScheduler:
 
         initialRoute = self.greedyInitialization()
         # if all of the current suppliers can't satisfy the order, return a empty schedule
+        # print(initialRoute)
         if not initialRoute.isEnoughSuppliers():
             return Route(self.order).generateResponse()
-        return initialRoute.generateResponse()
-        # do clustering among suppliers\
-        # self.clusterSuppliers()
+        self.best_route = initialRoute
 
-        # sorted_clusters = self.sort_clusters()
+        # for supplier in self.suppliers.values():
+        #     print(supplier)
+        # do local search
+        self.localSearch()
 
-        # best_route = self.get_best_route(sorted_clusters)
+        return self.best_route.generateResponse()
 
     def greedyInitialization(self):
         """
@@ -114,22 +113,76 @@ class RouteScheduler:
 
         # initialize the supplier rank
 
-        self.clusters = sorted(self.clusters, key=lambda x: x.getPriority(), reverse=True)
+        self.clusters = sorted(self.clusters, key=lambda x: x.getClusterPriority(self.order.items), reverse=True)
         rankedSuppliers = []
         for cluster in self.clusters:
-            rankedSuppliers.extend(sorted(cluster.clusterMembers, key=lambda x: x.getPriority(), reverse=True))
-        # initialize the route
+            cluster.clusterMembers = sorted(cluster.clusterMembers, key=lambda x: x.getPriority(self.order.items), reverse=True)
+            rankedSuppliers.extend(cluster.clusterMembers)
+        # # initialize the route
         route = Route(self.order)
         route.setRider(rankedSuppliers[0].getNearestRider())
-        # initialize the route with greedy insertion
+        # # initialize the route with greedy insertion
         for supplier in rankedSuppliers:
             route.addSupplier(supplier)
+        route.setCost(self.EvaluateRoute(route))
         return route
 
-    def localSearch(self, route:Route):
+
+    def getLocalCluster(self):
         """
-        Local search for the given route.
+        Brief:
+            do local search for the current clusters rank, generate a new clusters rank and return
         """
+        clusters = self.clusters.copy()
+        # random.shuffle(clusters)
+        # return clusters
+        # find the cluster that need to be swapped
+        if random.random() < 0.5:
+            cluster1 = random.choice(clusters[:len(self.best_route.numSupplierEachCluster)])
+            if random.random() < 0.5:
+                cluster2 = random.choice(clusters[:len(self.best_route.numSupplierEachCluster)])
+            else:
+                cluster2 = random.choice(clusters[len(self.best_route.numSupplierEachCluster):])
+            # swap the cluster
+            index1 = clusters.index(cluster1)
+            index2 = clusters.index(cluster2)
+            clusters[index1], clusters[index2] = clusters[index2], clusters[index1]
+        else:
+            # if the current Supplier
+            cluster = random.choice(clusters[:len(self.best_route.numSupplierEachCluster)])
+            if random.random() < 0.1:
+                cluster.clusterMembers = sorted(cluster.clusterMembers, key=lambda x: x.getPriority(self.order.items), reverse=True)
+            else:
+                random.shuffle(cluster.clusterMembers)
+        return clusters
+
+    def localSearch(self):
+        """
+        Brief:
+            Local search for the given route.
+        Args:
+
+        Return:
+
+        """
+        for _ in range(self.maxIteration):
+            clusters = self.getLocalCluster()
+            rankedSuppliers = []
+            for cluster in clusters:
+                rankedSuppliers.extend(cluster.clusterMembers)
+            # initialize the route
+            route = Route(self.order)
+            route.setRider(rankedSuppliers[0].getNearestRider())
+            # initialize the route with greedy insertion
+            for supplier in rankedSuppliers:
+                route.addSupplier(supplier)
+            route.setCost(self.EvaluateRoute(route))
+            if route.cost < self.best_route.cost:
+                print("- New best route found")
+                print(route)
+                self.best_route = route
+                self.clusters = clusters
+
 
     def getDistance(self, id1:int, id2:int):
         """
@@ -165,10 +218,13 @@ class RouteScheduler:
         Evaluate the given route.
         """
         total_cost = 0
-        total_cost += self.getDistance(route.rider.id, route.suppliers[0].id)
-        for i in range(len(route.suppliers)-1):
-            total_cost += self.getDistance(route.suppliers[i].id, route.suppliers[i+1].id)
-        total_cost += self.getDistance(route.suppliers[-1].id, route.order.id)
+        if len(route.suppliers) != 0:
+            total_cost += self.getDistance(route.rider.id, route.suppliers[0].id)
+            for i in range(len(route.suppliers)-1):
+                total_cost += self.getDistance(route.suppliers[i].id, route.suppliers[i+1].id)
+            total_cost += self.getDistance(route.suppliers[-1].id, route.order.id)
+        else:
+            total_cost = float('inf')
         return total_cost
 
     def clusterSuppliers(self):

@@ -1,3 +1,4 @@
+from pydoc import resolve
 from turtle import distance
 import numpy as np
 from typing import List, Tuple
@@ -18,6 +19,11 @@ class Supplier:
         self.aroundSuppliers = []
         self.aroundRiders = []
         self.aroundScope = 0
+        self.clusterItems = {}
+        for item in list(self.items.keys()):
+            if self.items[item] <= 0.0:
+                del self.items[item]
+        self.priority = None
 
     def addItem(self, item:str, amount:float):
         self.items[item] = amount
@@ -34,9 +40,13 @@ class Supplier:
 
     def addClusterMember(self, supplier):
         self.clusterMembers.append(supplier)
+        for item in supplier.items:
+            self.clusterItems[item] = self.clusterItems.get(item, 0) + supplier.items[item]
 
     def removeClusterMember(self, supplier):
         self.clusterMembers.remove(supplier)
+        for item in supplier.items:
+            self.clusterItems[item] = self.clusterItems.get(item, 0) - supplier.items[item]
 
     def updateClusterIfCloser(self, cluster, distance:float):
         """
@@ -85,16 +95,41 @@ class Supplier:
             return None
         return min(self.aroundRiders, key=lambda x: x[1])[1]
 
-    def getPriority(self):
+    def getClusterPriority(self, requestItems:dict, alpha:float = 0.1) -> float:
         """
         get the priority of the supplier
+        Args:
+            requestItems: the items that the rider wants to buy
+            alpha: the bigger alpha, the more prosperous cluster will be preferred
+        """
+        if not self.isClusterCenter():
+            if not self.isClustered():
+                return self.getPriority(requestItems)
+            else:
+                return self.clusterCenter.getClusterPriority(requestItems)
+        priority = 0
+        priority -= self.distanceToOrder # tend to choose the supplier with the shortest distance to order
+        priority -= self.getNearestRiderDistance() # tend to choose the supplier with the shortest distance to nearest rider
+        priority *= (1 + alpha*np.exp(-len(self.aroundRiders) - len(self.aroundSuppliers))) # tend to choose the supplier with more around suppliers and riders
+        priority *= np.sum((1 + alpha*np.exp(-np.array([self.clusterItems[item] for item in requestItems.keys() if item in self.clusterItems])))) # tend to choose the supplier with more items
+        if self.isClusterCenter():
+            self.priority = priority
+        return priority
+
+    def getPriority(self, requestItems:dict, alpha:float = 0.1) -> float:
+        """
+        get the priority of the supplier
+        Args:
+            requestItems: the items that the rider wants to buy
+            alpha: the bigger alpha, the more prosperous supplier will be preferred
         """
         priority = 0
-        priority += len(self.aroundSuppliers) # tend to choose the supplier with more around suppliers
-        priority += len(self.aroundRiders) # tend to choose the supplier with more around riders
-        # priority -= self.distanceToOrder # tend to choose the supplier with the shortest distance to order
-        # priority -= self.getNearestRiderDistance() # tend to choose the supplier with the shortest distance to nearest rider
-        priority += len(self.items) + sum(self.items.values()) # tend to choose the supplier with more items
+        priority -= self.distanceToOrder # tend to choose the supplier with the shortest distance to order
+        priority -= self.getNearestRiderDistance() # tend to choose the supplier with the shortest distance to nearest rider
+        priority *= (1 + alpha*np.exp(-len(self.aroundRiders) - len(self.aroundSuppliers))) # tend to choose the supplier with more around suppliers and riders
+        priority *= np.sum((1 + alpha*np.exp(-np.array([self.items[item] for item in requestItems.keys() if item in self.items])))) # tend to choose the supplier with more items
+        if not self.isClusterCenter():
+            self.priority = priority
         return priority
 
     def isClusterCenter(self):
@@ -104,17 +139,39 @@ class Supplier:
         return self.clusterCenter != None
 
     def __str__(self) -> str:
-        return "Supplier {}, Cluster {}, Items {}, aroundSupplier {}, aroundRiders {}".format(self.id, self.clusterCenter.id if self.isClustered() else "None" , self.items, [supplier.id for supplier in self.aroundSuppliers], [rider.id for rider, distance in self.aroundRiders])
+        return "Supplier {}, Cluster {}, Items {}, AroundSupplier {}, AroundRiders {}, DistanceToOrder {}, DistanceToNearestRider {}, Priority {}".format(
+            self.id,
+            self.clusterCenter.id if self.isClustered() else "None",
+            self.items, [supplier.id for supplier in self.aroundSuppliers],
+            [rider.id for rider, distance in self.aroundRiders],
+            self.distanceToOrder,
+            self.getNearestRiderDistance(),
+            self.priority
+            )
 
     def __repr__(self) -> str:
-        return "Supplier {}, Cluster {}, Items {}, aroundSupplier {}, aroundRiders {}".format(self.id, self.clusterCenter.id if self.isClustered() else "None" , self.items, [supplier.id for supplier in self.aroundSuppliers], [rider.id for rider, distance in self.aroundRiders])
+        return "Supplier {}, Cluster {}, Items {}, AroundSupplier {}, AroundRiders {}, DistanceToOrder {}, DistanceToNearestRider {}, Priority {}".format(
+            self.id,
+            self.clusterCenter.id if self.isClustered() else "None",
+            self.items, [supplier.id for supplier in self.aroundSuppliers],
+            [rider.id for rider, distance in self.aroundRiders],
+            self.distanceToOrder,
+            self.getNearestRiderDistance(),
+            self.priority
+            )
+
+    def __eq__(self, other:object):
+        if other is None:
+            return False
+        return self.id == other.id
 
 
 
 class Rider:
-    def __init__(self, id:int):
+    def __init__(self, id:int, responseId:int):
         self.id = id
         self.nearestSupplier = None
+        self.responseId = responseId
 
     def setNearestSupplier(self, supplier:Supplier, distance:float):
         self.nearestSupplier = supplier
@@ -130,6 +187,9 @@ class Order:
     def __init__(self, id:int, items:dict = None):
         self.id = id
         self.items = items if items is not None else {}
+        for item in list(self.items.keys()):
+            if self.items[item] <= 0.0:
+                del self.items[item]
 
 class Route:
     def __init__(self, order:Order):
@@ -141,6 +201,7 @@ class Route:
         self.totalItems = {}
         self.itemsForEachSupplier = {}
         self.cost = float("inf")
+        self.numSupplierEachCluster = {}
 
     def setRider(self, rider:Rider):
         self.rider = rider
@@ -171,6 +232,7 @@ class Route:
         if sum(itemlist.values()) > 0:
             self.itemsForEachSupplier[supplier.id] = itemlist
             self.suppliers.append(supplier)
+            self.numSupplierEachCluster[supplier.clusterCenter.id] = self.numSupplierEachCluster.get(supplier.clusterCenter.id, 0) + 1
             self.num_suppliers += 1
             return True
 
@@ -183,7 +245,7 @@ class Route:
     def generateResponse(self):
         response = ScheduleReply_pb2()
         if self.rider is not None:
-            response.deliverer_id = self.rider.id
+            response.deliverer_id = self.rider.responseId
         for supplier in self.suppliers[:self.num_suppliers]:
             tmp_itemlist = ItemList_pb2(items=self.itemsForEachSupplier[supplier.id])
             tmp_route = Route_pb2(supplier_id=supplier.id, itemlist=tmp_itemlist)
@@ -194,9 +256,20 @@ class Route:
         self.cost = cost
 
     def __str__(self) -> str:
-        return "Route: Rider {}, Order {}, NumSuppliers {}, TotalItems {}, Suppliers {}".format(self.rider.id, (self.order.id,self.order.items), self.num_suppliers, self.totalItems, [itemlist for itemlist in self.itemsForEachSupplier.items()])
+        return "Route: Rider {}, Order {}, NumSuppliers {}, TotalItems {}, Suppliers {}, Cost {}".format(
+            self.rider.id if self.rider is not None else "None",
+            (self.order.id,self.order.items),
+            self.num_suppliers, self.totalItems,
+            [itemlist for itemlist in self.itemsForEachSupplier.items()],
+            self.cost,
+            )
 
     def __repr__(self) -> str:
-        return "Route: Rider {}, Order {}, NumSuppliers {}, TotalItems {}, Suppliers {}".format(self.rider.id, (self.order.id,self.order.items), self.num_suppliers, self.totalItems, [itemlist for itemlist in self.itemsForEachSupplier.items()])
-
+        return "Route: Rider {}, Order {}, NumSuppliers {}, TotalItems {}, Suppliers {}, Cost {}".format(
+            self.rider.id if self.rider is not None else "None",
+            (self.order.id,self.order.items),
+            self.num_suppliers, self.totalItems,
+            [itemlist for itemlist in self.itemsForEachSupplier.items()],
+            self.cost,
+            )
 
