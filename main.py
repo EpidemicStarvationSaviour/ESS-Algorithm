@@ -1,4 +1,5 @@
 import os, sys
+import traceback
 sys.path.insert(0, os.path.abspath("./ESS_Protobuf"))
 
 from concurrent import futures
@@ -20,7 +21,11 @@ class Algorithm(interface_pb2_grpc.AlgorithmServicer):
         print("Received: " + request.message)
         return PingReply(message = 'Pong')
     def Schedule(self, request, context):
-        response = scheduler.scheduleRoute(request)
+        try:
+            response = scheduler.scheduleRoute(request)
+        except Exception as e:
+            traceback.print_exc()
+        print(response) # debug
         return response
 
 def serve():

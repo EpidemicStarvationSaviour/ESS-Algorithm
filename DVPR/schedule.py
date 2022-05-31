@@ -91,13 +91,13 @@ class RouteScheduler:
 
         initialRoute = self.greedyInitialization()
         # if all of the current suppliers can't satisfy the order, return a empty schedule
-        # print(initialRoute)
+        print(initialRoute) # debug
         if not initialRoute.isEnoughSuppliers():
             return Route(self.order).generateResponse()
         self.best_route = initialRoute
 
-        # for supplier in self.suppliers.values():
-        #     print(supplier)
+        for supplier in self.suppliers.values(): # debug
+            print(supplier) # debug
         # do local search
         self.localSearch()
 
@@ -142,7 +142,7 @@ class RouteScheduler:
             if random.random() < 0.5:
                 cluster2 = random.choice(clusters[:len(self.best_route.numSupplierEachCluster)])
             else:
-                cluster2 = random.choice(clusters[len(self.best_route.numSupplierEachCluster):])
+                cluster2 = random.choice(clusters[len(self.best_route.numSupplierEachCluster)-1:])
             # swap the cluster
             index1 = clusters.index(cluster1)
             index2 = clusters.index(cluster2)
@@ -178,8 +178,8 @@ class RouteScheduler:
                 route.addSupplier(supplier)
             route.setCost(self.EvaluateRoute(route))
             if route.cost < self.best_route.cost:
-                # print("- New best route found")
-                # print(route)
+                print("- New best route found") # debug
+                print(route) # debug
                 self.best_route = route
                 self.clusters = clusters
 
