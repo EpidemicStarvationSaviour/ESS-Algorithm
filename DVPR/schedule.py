@@ -178,8 +178,8 @@ class RouteScheduler:
                 route.addSupplier(supplier)
             route.setCost(self.EvaluateRoute(route))
             if route.cost < self.best_route.cost:
-                print("- New best route found")
-                print(route)
+                # print("- New best route found")
+                # print(route)
                 self.best_route = route
                 self.clusters = clusters
 
