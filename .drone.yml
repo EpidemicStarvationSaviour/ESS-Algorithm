@@ -1,0 +1,46 @@
+kind: pipeline
+type: docker
+name: build
+platform:
+  os: linux
+  arch: amd64
+steps:
+  - name: submodules
+    image: alpine/git
+    commands:
+      - git submodule update --init --recursive
+
+  - name: build
+    image: docker
+    commands:
+      - docker build -t ess-algorithm .
+    volumes:
+      - name: cache
+        path: /var/run/docker.sock
+trigger:
+  branch:
+    - main
+  event:
+    - push
+    - rollback
+volumes:
+  - name: cache
+    host:
+      path: /var/run/docker.sock
+---
+kind: pipeline
+type: exec
+name: deploy
+platform:
+  os: linux
+  arch: amd64
+clone:
+  disable: true
+steps:
+  - name: deploy
+    commands:
+      - cd /app/ess-backend
+      - docker-compose up -d
+      - docker image prune -f
+depends_on:
+  - build
