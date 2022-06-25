@@ -91,13 +91,15 @@ class RouteScheduler:
 
         initialRoute = self.greedyInitialization()
         # if all of the current suppliers can't satisfy the order, return a empty schedule
-        # print(initialRoute) # debug
+
         if not initialRoute.isEnoughSuppliers():
             return Route(self.order).generateResponse()
         self.best_route = initialRoute
 
-        # for supplier in self.suppliers.values(): # debug
-        #     print(supplier) # debug
+        for supplier in self.suppliers.values(): # debug
+            print(supplier) # debug
+
+        print(initialRoute) # debug
         # do local search
         self.localSearch()
 
@@ -113,6 +115,7 @@ class RouteScheduler:
 
         # initialize the supplier rank
 
+        print("Greedy initialization...")
         self.clusters = sorted(self.clusters, key=lambda x: x.getClusterPriority(self.order.items), reverse=True)
         rankedSuppliers = []
         for cluster in self.clusters:
@@ -178,8 +181,8 @@ class RouteScheduler:
                 route.addSupplier(supplier)
             route.setCost(self.EvaluateRoute(route))
             if route.cost < self.best_route.cost:
-                # print("- New best route found") # debug
-                # print(route) # debug
+                print("- New best route found") # debug
+                print(route) # debug
                 self.best_route = route
                 self.clusters = clusters
 
