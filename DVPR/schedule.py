@@ -16,6 +16,7 @@ class RouteScheduler:
         Brief:
             initialize the request from the request object
         """
+        print("--- Initialize from request ---")
         self.clusters = []
         self.order = Order(0, dict(request.request.items))
         self.suppliers = [Supplier(index + 1, dict(item.items)) for index, item in enumerate(list(request.itemlists))]
@@ -95,10 +96,13 @@ class RouteScheduler:
         if not initialRoute.isEnoughSuppliers():
             return Route(self.order).generateResponse()
         self.best_route = initialRoute
-
+        print("--- Suppliers ---")
         for supplier in self.suppliers.values(): # debug
             print(supplier) # debug
-
+        print("--- Riders ---")
+        for rider in self.riders.values():
+            print(rider)
+        print("--- initialRoute ---")
         print(initialRoute) # debug
         # do local search
         self.localSearch()
