@@ -90,18 +90,20 @@ class RouteScheduler:
         # read the request
         self.initializeFromRequest(request)
 
-        initialRoute = self.greedyInitialization()
-        # if all of the current suppliers can't satisfy the order, return a empty schedule
-
-        if not initialRoute.isEnoughSuppliers():
-            return Route(self.order).generateResponse()
-        self.best_route = initialRoute
         print("--- Suppliers ---")
         for supplier in self.suppliers.values(): # debug
             print(supplier) # debug
         print("--- Riders ---")
         for rider in self.riders.values():
             print(rider)
+
+        initialRoute = self.greedyInitialization()
+        # if all of the current suppliers can't satisfy the order, return a empty schedule
+
+        if not initialRoute.isEnoughSuppliers():
+            return Route(self.order).generateResponse()
+        self.best_route = initialRoute
+
         print("--- initialRoute ---")
         print(initialRoute) # debug
         # do local search
